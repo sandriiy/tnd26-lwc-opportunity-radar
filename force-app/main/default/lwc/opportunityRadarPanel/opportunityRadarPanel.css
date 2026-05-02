@@ -1,0 +1,143 @@
+.panel-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.3);
+    z-index: 9000;
+    display: flex;
+    justify-content: flex-end;
+}
+
+.panel {
+    background: white;
+    width: 420px;
+    max-width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    box-shadow: -4px 0 16px rgba(0,0,0,0.15);
+    overflow: hidden;
+}
+
+.panel-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    padding: 1.5rem;
+    border-bottom: 1px solid #e0e0e0;
+    flex-shrink: 0;
+}
+
+.panel-title-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+}
+
+.panel-title {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #032d60;
+    margin: 0;
+}
+
+.panel-account {
+    font-size: 0.82rem;
+    color: #706e6b;
+}
+
+.panel-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1rem 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.panel-section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.panel-section-title {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #706e6b;
+    font-weight: 600;
+    margin: 0;
+    padding-bottom: 0.4rem;
+    border-bottom: 1px solid #f3f3f3;
+}
+
+.panel-detail-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+}
+
+.panel-detail-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+}
+
+.detail-label {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #706e6b;
+}
+
+.detail-value {
+    font-size: 0.875rem;
+    color: #3e3e3c;
+    font-weight: 500;
+}
+
+.panel-next-step {
+    font-size: 0.875rem;
+    color: #3e3e3c;
+    margin: 0;
+    font-style: italic;
+}
+
+.panel-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.form-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.panel-risk-reasons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+
+.risk-chip {
+    font-size: 0.72rem;
+    background: #f3f3f3;
+    border: 1px solid #e0e0e0;
+    border-radius: 12px;
+    padding: 0.15rem 0.6rem;
+    color: #444;
+}
+
+.panel-suggestion {
+    font-size: 0.82rem;
+    color: #1b5fad;
+    margin: 0;
+}
+
+.panel-open-record {
+    padding-top: 0.5rem;
+}

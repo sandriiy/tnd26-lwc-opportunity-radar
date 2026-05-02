@@ -1,0 +1,60 @@
+.radar-header {
+    background: white;
+    border-radius: 6px;
+    padding: 1.5rem;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.header-title {
+    font-size: 1.5rem;
+    font-weight: 300;
+    letter-spacing: -0.01em;
+    color: #032d60;
+    margin: 0;
+}
+
+.header-metrics {
+    gap: 1rem;
+}
+
+.metric-pill {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 0.75rem 1.5rem;
+    border-radius: 8px;
+    min-width: 90px;
+}
+
+.metric-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.metric-label {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-top: 0.25rem;
+}
+
+.metric-critical {
+    background: #fce4e4;
+    color: #c23934;
+}
+
+.metric-warning {
+    background: #fef5e0;
+    color: #a9671d;
+}
+
+.metric-healthy {
+    background: #e3f5e1;
+    color: #2e844a;
+}
+
+.metric-pipeline {
+    background: #e8f0fd;
+    color: #1b5fad;
+}

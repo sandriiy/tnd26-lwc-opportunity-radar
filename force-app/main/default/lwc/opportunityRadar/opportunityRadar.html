@@ -1,0 +1,76 @@
+<template>
+    <div class="radar-page">
+        <c-opportunity-radar-header
+            critical-count={criticalCount}
+            warning-count={warningCount}
+            healthy-count={healthyCount}
+            total-pipeline={totalPipeline}
+            last-refresh={lastRefresh}
+            is-loading={isLoading}
+            onrefresh={handleRefresh}
+        ></c-opportunity-radar-header>
+
+        <c-opportunity-radar-filters
+            filters={filters}
+            onfilterchange={handleFilterChange}
+        ></c-opportunity-radar-filters>
+
+        <div class="radar-feed">
+            <template lwc:if={isLoading}>
+                <div class="feed-loading">
+                    <lightning-spinner alternative-text="Loading opportunities" size="medium"></lightning-spinner>
+                </div>
+            </template>
+
+            <template lwc:else>
+                <template lwc:if={hasError}>
+                    <div class="feed-error">
+                        <p>{errorMessage}</p>
+                    </div>
+                </template>
+
+                <template lwc:else>
+                    <template lwc:if={hasOpportunities}>
+                        <template for:each={visibleOpportunities} for:item="opp">
+                            <c-opportunity-radar-card
+                                key={opp.id}
+                                opportunity={opp}
+                                is-compact={filters.compactView}
+                                is-selected={opp.isSelected}
+                                oncardselect={handleCardSelect}
+                                oncreatefollowtask={handleCreateFollowUpTask}
+                                onupdatenextstep={handleUpdateNextStep}
+                                onupdateclosedate={handleUpdateCloseDate}
+                                onupdatestage={handleUpdateStage}
+                                onsnooze={handleSnooze}
+                            ></c-opportunity-radar-card>
+                        </template>
+                        <template lwc:if={canLoadMore}>
+                            <div class="load-more-container">
+                                <lightning-button
+                                    label="Load More"
+                                    onclick={handleLoadMore}
+                                ></lightning-button>
+                            </div>
+                        </template>
+                    </template>
+
+                    <template lwc:else>
+                        <div class="feed-empty">
+                            <p>No opportunities match your current filters</p>
+                        </div>
+                    </template>
+                </template>
+            </template>
+        </div>
+
+        <template lwc:if={selectedOpportunity}>
+            <c-opportunity-radar-panel
+                opportunity={selectedOpportunity}
+                onclosepanel={handleClosePanel}
+                oncreatefollowtask={handleCreateFollowUpTask}
+                onupdatenextstep={handleUpdateNextStep}
+            ></c-opportunity-radar-panel>
+        </template>
+    </div>
+</template>

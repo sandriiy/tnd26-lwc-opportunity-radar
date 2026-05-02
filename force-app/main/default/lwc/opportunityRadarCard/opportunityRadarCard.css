@@ -1,0 +1,175 @@
+.radar-card {
+    background: white;
+    border-radius: 6px;
+    padding: 1.25rem 1.5rem;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    cursor: pointer;
+    border-left: 4px solid transparent;
+    transition: box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.radar-card:hover {
+    box-shadow: 0 3px 8px rgba(0,0,0,0.15);
+}
+
+.radar-card--selected {
+    border-left-color: #0176d3;
+    box-shadow: 0 3px 10px rgba(1,118,211,0.2);
+}
+
+.radar-card--compact {
+    padding: 0.75rem 1.25rem;
+}
+
+.card-title-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+}
+
+.card-deal-name {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #032d60;
+}
+
+.card-account {
+    font-size: 0.8rem;
+    color: #706e6b;
+}
+
+.risk-badge {
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 0.2rem 0.6rem;
+    border-radius: 20px;
+}
+
+.risk-badge-critical {
+    background: #fce4e4;
+    color: #c23934;
+}
+
+.risk-badge-warning {
+    background: #fef5e0;
+    color: #a9671d;
+}
+
+.risk-badge-healthy {
+    background: #e3f5e1;
+    color: #2e844a;
+}
+
+.risk-badge-snoozed {
+    background: #f3f3f3;
+    color: #706e6b;
+}
+
+.card-summary {
+    gap: 0.5rem;
+}
+
+.card-amount {
+    font-weight: 600;
+    color: #032d60;
+}
+
+.card-separator {
+    color: #c9c9c9;
+}
+
+.card-stage {
+    color: #444;
+    font-size: 0.875rem;
+}
+
+.card-close-date {
+    font-size: 0.875rem;
+    color: #444;
+}
+
+.card-close-date--overdue {
+    color: #c23934;
+    font-weight: 600;
+}
+
+.card-close-date--urgent {
+    color: #a9671d;
+    font-weight: 600;
+}
+
+.card-meta {
+    gap: 2rem;
+}
+
+.card-meta-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+}
+
+.meta-label {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #706e6b;
+}
+
+.meta-value {
+    font-size: 0.85rem;
+    color: #3e3e3c;
+}
+
+.card-risk-reasons {
+    gap: 0.4rem;
+}
+
+.risk-chip {
+    font-size: 0.72rem;
+    background: #f3f3f3;
+    border: 1px solid #e0e0e0;
+    border-radius: 12px;
+    padding: 0.15rem 0.6rem;
+    color: #444;
+}
+
+.card-suggestion {
+    gap: 0.4rem;
+    font-size: 0.82rem;
+    color: #1b5fad;
+}
+
+.suggestion-icon {
+    flex-shrink: 0;
+}
+
+.card-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    border-top: 1px solid #f3f3f3;
+    padding-top: 0.75rem;
+}
+
+.action-icon-row {
+    gap: 0.25rem;
+}
+
+.action-wrapper {
+    display: inline-flex;
+    transition: opacity 0.2s ease;
+}
+
+.action-wrapper--dimmed {
+    opacity: 0.3;
+}
+
+.inline-form {
+    gap: 0.5rem;
+    padding: 0.75rem;
+    background: #f8f8f8;
+    border-radius: 4px;
+    border: 1px solid #e0e0e0;
+}

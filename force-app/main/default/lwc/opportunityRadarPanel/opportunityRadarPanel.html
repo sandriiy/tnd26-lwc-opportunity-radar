@@ -1,0 +1,125 @@
+<template>
+    <div class="panel-backdrop" onclick={handleBackdropClick}>
+        <div class="panel" onclick={stopPropagation}>
+            <div class="panel-header">
+                <div class="panel-title-group">
+                    <h2 class="panel-title">{opportunity.name}</h2>
+                    <span class="panel-account">{opportunity.accountName}</span>
+                </div>
+                <lightning-button-icon
+                    icon-name="utility:close"
+                    alternative-text="Close"
+                    title="Close"
+                    variant="border-filled"
+                    onclick={handleClose}
+                ></lightning-button-icon>
+            </div>
+
+            <div class="panel-body">
+                <div class="panel-section">
+                    <div class="panel-detail-grid">
+                        <div class="panel-detail-item">
+                            <span class="detail-label">Stage</span>
+                            <span class="detail-value">{opportunity.stageName}</span>
+                        </div>
+                        <div class="panel-detail-item">
+                            <span class="detail-label">Amount</span>
+                            <span class="detail-value">{formattedAmount}</span>
+                        </div>
+                        <div class="panel-detail-item">
+                            <span class="detail-label">Close Date</span>
+                            <span class="detail-value">{opportunity.closeDate}</span>
+                        </div>
+                        <div class="panel-detail-item">
+                            <span class="detail-label">Owner</span>
+                            <span class="detail-value">{opportunity.ownerName}</span>
+                        </div>
+                        <div class="panel-detail-item">
+                            <span class="detail-label">Probability</span>
+                            <span class="detail-value">{opportunity.probability}%</span>
+                        </div>
+                        <div class="panel-detail-item">
+                            <span class="detail-label">Forecast Category</span>
+                            <span class="detail-value">{opportunity.forecastCategory}</span>
+                        </div>
+                        <div class="panel-detail-item">
+                            <span class="detail-label">Last Follow-up</span>
+                            <span class="detail-value">{formattedLastFollowUp}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="panel-section">
+                    <h3 class="panel-section-title">Next Step</h3>
+                    <template lwc:if={showNextStepForm}>
+                        <div class="panel-form">
+                            <lightning-textarea
+                                label="Next step"
+                                variant="label-hidden"
+                                value={nextStepValue}
+                                onchange={handleNextStepChange}
+                            ></lightning-textarea>
+                            <div class="form-actions">
+                                <lightning-button label="Save" variant="brand" onclick={handleSaveNextStep}></lightning-button>
+                                <lightning-button label="Cancel" onclick={handleCancelNextStep}></lightning-button>
+                            </div>
+                        </div>
+                    </template>
+                    <template lwc:else>
+                        <p class="panel-next-step">{nextStepDisplay}</p>
+                        <lightning-button
+                            label="Update Next Step"
+                            variant="neutral"
+                            size="small"
+                            onclick={handleShowNextStepForm}
+                        ></lightning-button>
+                    </template>
+                </div>
+
+                <div class="panel-section">
+                    <h3 class="panel-section-title">Risk</h3>
+                    <div class="panel-risk-reasons">
+                        <template for:each={opportunity.riskReasons} for:item="reason">
+                            <span key={reason} class="risk-chip">{reason}</span>
+                        </template>
+                    </div>
+                    <p class="panel-suggestion">{opportunity.suggestedAction}</p>
+                </div>
+
+                <div class="panel-section">
+                    <h3 class="panel-section-title">Create Follow-up Task</h3>
+                    <div class="panel-form">
+                        <lightning-input
+                            label="Subject"
+                            value={taskSubject}
+                            onchange={handleTaskSubjectChange}
+                        ></lightning-input>
+                        <lightning-input
+                            type="date"
+                            label="Due Date"
+                            value={taskDueDate}
+                            onchange={handleTaskDueDateChange}
+                        ></lightning-input>
+                        <div class="form-actions">
+                            <lightning-button
+                                label="Create Task"
+                                variant="brand"
+                                onclick={handleCreateTask}
+                            ></lightning-button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="panel-open-record">
+                    <lightning-button
+                        label="Open Full Record"
+                        icon-name="utility:new_window"
+                        icon-position="right"
+                        variant="neutral"
+                        onclick={handleOpenRecord}
+                    ></lightning-button>
+                </div>
+            </div>
+        </div>
+    </div>
+</template>

@@ -1,0 +1,36 @@
+<template>
+    <div class="radar-header">
+        <div class="slds-grid slds-grid_vertical-align-center slds-grid_align-spread slds-m-bottom_medium">
+            <h1 class="header-title">Opportunity Radar</h1>
+            <div class="slds-grid slds-grid_vertical-align-center">
+                <span class="slds-text-body_small slds-text-color_weak slds-m-right_x-small" lwc:if={lastRefresh}>Last refreshed: {lastRefresh}</span>
+                <lightning-button-icon
+                    icon-name="utility:refresh"
+                    alternative-text="Refresh"
+                    title="Refresh"
+                    variant="border-filled"
+                    disabled={isLoading}
+                    onclick={handleRefresh}
+                ></lightning-button-icon>
+            </div>
+        </div>
+        <div class="header-metrics slds-grid slds-wrap">
+            <div class="metric-pill metric-critical">
+                <span class="metric-value">{criticalCount}</span>
+                <span class="metric-label">Critical</span>
+            </div>
+            <div class="metric-pill metric-warning">
+                <span class="metric-value">{warningCount}</span>
+                <span class="metric-label">Warning</span>
+            </div>
+            <div class="metric-pill metric-healthy">
+                <span class="metric-value">{healthyCount}</span>
+                <span class="metric-label">Healthy</span>
+            </div>
+            <div class="metric-pill metric-pipeline">
+                <span class="metric-value">{formattedPipeline}</span>
+                <span class="metric-label">Open Pipeline</span>
+            </div>
+        </div>
+    </div>
+</template>

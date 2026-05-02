@@ -1,0 +1,167 @@
+<template>
+    <div class={cardClass} onclick={handleCardClick}>
+        <div class="slds-grid slds-grid_align-spread slds-m-bottom_x-small">
+            <div class="card-title-group">
+                <span class="card-deal-name">{opportunity.name}</span>
+                <span class="card-account">{opportunity.accountName}</span>
+            </div>
+            <div class="card-risk-badge">
+                <span class={riskBadgeClass}>{opportunity.riskLevel}</span>
+            </div>
+        </div>
+
+        <div class="card-summary slds-grid slds-grid_vertical-align-center slds-wrap slds-m-bottom_small">
+            <span class="card-amount">{formattedAmount}</span>
+            <span class="card-separator">·</span>
+            <span class="card-stage">{opportunity.stageName}</span>
+            <span class="card-separator">·</span>
+            <span class={closeDateClass}>Closes {formattedCloseDate}</span>
+        </div>
+
+        <div class="card-meta slds-grid slds-wrap slds-m-bottom_small" lwc:if={showDetails}>
+            <div class="card-meta-item">
+                <span class="slds-text-title_caps">Owner</span>
+                <span class="meta-value">{opportunity.ownerName}</span>
+            </div>
+            <div class="card-meta-item">
+                <span class="slds-text-title_caps">Last Follow-up</span>
+                <span class="meta-value">{formattedLastFollowUp}</span>
+            </div>
+            <div class="card-meta-item" lwc:if={opportunity.nextStep}>
+                <span class="slds-text-title_caps">Next Step</span>
+                <span class="meta-value">{opportunity.nextStep}</span>
+            </div>
+        </div>
+
+        <div class="card-risk-reasons slds-grid slds-wrap slds-m-bottom_small" lwc:if={showDetails}>
+            <template for:each={opportunity.riskReasons} for:item="reason">
+                <span key={reason} class="slds-badge risk-chip">{reason}</span>
+            </template>
+        </div>
+
+        <div class="card-suggestion slds-grid slds-grid_vertical-align-center slds-m-bottom_small" lwc:if={showDetails}>
+            <lightning-icon icon-name="utility:info" size="x-small" class="suggestion-icon"></lightning-icon>
+            <span>{opportunity.suggestedAction}</span>
+        </div>
+
+        <div class="card-actions" onclick={stopPropagation}>
+            <div class="action-icon-row slds-grid slds-grid_vertical-align-center">
+                <span class={taskWrapperClass}>
+                    <lightning-button-icon
+                        icon-name="utility:task"
+                        title="Create follow-up task"
+                        alternative-text="Create follow-up task"
+                        size="small"
+                        onclick={handleShowTaskForm}
+                    ></lightning-button-icon>
+                </span>
+                <span class={nextStepWrapperClass}>
+                    <lightning-button-icon
+                        icon-name="utility:edit"
+                        title="Update next step"
+                        alternative-text="Update next step"
+                        size="small"
+                        onclick={handleShowNextStepForm}
+                    ></lightning-button-icon>
+                </span>
+                <span class={closeDateWrapperClass}>
+                    <lightning-button-icon
+                        icon-name="utility:event"
+                        title="Update close date"
+                        alternative-text="Update close date"
+                        size="small"
+                        onclick={handleShowCloseDateForm}
+                    ></lightning-button-icon>
+                </span>
+                <span class={stageWrapperClass}>
+                    <lightning-button-icon
+                        icon-name="utility:stage"
+                        title="Update stage"
+                        alternative-text="Update stage"
+                        size="small"
+                        onclick={handleShowStageForm}
+                    ></lightning-button-icon>
+                </span>
+                <span class={snoozeWrapperClass}>
+                    <lightning-button-icon
+                        icon-name="utility:hide"
+                        title="Snooze"
+                        alternative-text="Snooze"
+                        size="small"
+                        onclick={handleSnooze}
+                    ></lightning-button-icon>
+                </span>
+                <lightning-button-icon
+                        icon-name="utility:new_window"
+                        title="Open opportunity"
+                        alternative-text="Open opportunity"
+                        size="small"
+                        onclick={handleOpenRecord}
+                    ></lightning-button-icon>
+            </div>
+
+            <template lwc:if={isTaskActive}>
+                <div class="inline-form slds-grid slds-grid_vertical-align-end slds-wrap">
+                    <lightning-input
+                        label="Task subject"
+                        variant="label-hidden"
+                        placeholder="Follow-up task subject"
+                        value={taskSubject}
+                        onchange={handleTaskSubjectChange}
+                    ></lightning-input>
+                    <lightning-input
+                        type="date"
+                        label="Due date"
+                        variant="label-hidden"
+                        value={taskDueDate}
+                        onchange={handleTaskDueDateChange}
+                    ></lightning-input>
+                    <lightning-button label="Save" variant="brand" size="small" onclick={handleSaveTask}></lightning-button>
+                    <lightning-button label="Cancel" size="small" onclick={handleCancelAction}></lightning-button>
+                </div>
+            </template>
+
+            <template lwc:if={isNextStepActive}>
+                <div class="inline-form slds-grid slds-grid_vertical-align-end slds-wrap">
+                    <lightning-input
+                        label="Next step"
+                        variant="label-hidden"
+                        placeholder="Enter next step..."
+                        value={nextStepValue}
+                        onchange={handleNextStepChange}
+                    ></lightning-input>
+                    <lightning-button label="Save" variant="brand" size="small" onclick={handleSaveNextStep}></lightning-button>
+                    <lightning-button label="Cancel" size="small" onclick={handleCancelAction}></lightning-button>
+                </div>
+            </template>
+
+            <template lwc:if={isCloseDateActive}>
+                <div class="inline-form slds-grid slds-grid_vertical-align-end slds-wrap">
+                    <lightning-input
+                        type="date"
+                        label="Close date"
+                        variant="label-hidden"
+                        value={closeDateValue}
+                        onchange={handleCloseDateChange}
+                    ></lightning-input>
+                    <lightning-button label="Save" variant="brand" size="small" onclick={handleSaveCloseDate}></lightning-button>
+                    <lightning-button label="Cancel" size="small" onclick={handleCancelAction}></lightning-button>
+                </div>
+            </template>
+
+            <template lwc:if={isStageActive}>
+                <div class="inline-form slds-grid slds-grid_vertical-align-end slds-wrap">
+                    <lightning-combobox
+                        label="Stage"
+                        variant="label-hidden"
+                        value={stageValue}
+                        options={stageOptions}
+                        onchange={handleStageChange}
+                    ></lightning-combobox>
+                    <lightning-button label="Save" variant="brand" size="small" onclick={handleSaveStage}></lightning-button>
+                    <lightning-button label="Cancel" size="small" onclick={handleCancelAction}></lightning-button>
+                </div>
+            </template>
+        </div>
+    </div>
+</template>
