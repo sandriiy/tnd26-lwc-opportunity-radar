@@ -28,25 +28,13 @@ public with sharing class OpportunityRadarEngine {
     }
 
     public void createTask(Id opportunityId, String subject, Date dueDate) {
-        Task t = new Task();
-        t.WhatId = opportunityId;
-        t.Subject = subject;
-        t.ActivityDate = dueDate;
-        t.Status = 'Not Started';
-        t.Priority = 'Normal';
-        insert t;
-    }
-
-    public void setNextStep(Id opportunityId, String nextStep) {
-        update new Opportunity(Id = opportunityId, NextStep = nextStep);
-    }
-
-    public void setCloseDate(Id opportunityId, Date closeDate) {
-        update new Opportunity(Id = opportunityId, CloseDate = closeDate);
-    }
-
-    public void setStage(Id opportunityId, String stageName) {
-        update new Opportunity(Id = opportunityId, StageName = stageName);
+        insert new Task(
+            WhatId = opportunityId,
+            Subject = subject,
+            ActivityDate = dueDate,
+            Status = 'Not Started',
+            Priority = 'Normal'
+        );
     }
 
     private List<Opportunity> queryOpportunities() {

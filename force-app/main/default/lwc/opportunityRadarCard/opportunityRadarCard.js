@@ -1,18 +1,8 @@
-import { LightningElement, api, track } from 'lwc';
+import { LightningElement, api, track, wire } from 'lwc';
 import { NavigationMixin } from 'lightning/navigation';
-
-const STAGE_OPTIONS = [
-    { label: 'Prospecting', value: 'Prospecting' },
-    { label: 'Qualification', value: 'Qualification' },
-    { label: 'Needs Analysis', value: 'Needs Analysis' },
-    { label: 'Value Proposition', value: 'Value Proposition' },
-    { label: 'Id. Decision Makers', value: 'Id. Decision Makers' },
-    { label: 'Perception Analysis', value: 'Perception Analysis' },
-    { label: 'Proposal/Price Quote', value: 'Proposal/Price Quote' },
-    { label: 'Negotiation/Review', value: 'Negotiation/Review' },
-    { label: 'Closed Won', value: 'Closed Won' },
-    { label: 'Closed Lost', value: 'Closed Lost' }
-];
+import { getObjectInfo, getPicklistValues } from 'lightning/uiObjectInfoApi';
+import OPPORTUNITY_OBJECT from '@salesforce/schema/Opportunity';
+import STAGENAME_FIELD from '@salesforce/schema/Opportunity.StageName';
 
 const RISK_BADGE_CLASSES = {
     Critical: 'risk-badge risk-badge-critical',
@@ -26,7 +16,13 @@ export default class OpportunityRadarCard extends NavigationMixin(LightningEleme
     @api isCompact = false;
     @api isSelected = false;
 
-    @track activeAction = null; // null | 'task' | 'nextStep' | 'closeDate' | 'stage'
+    @wire(getObjectInfo, { objectApiName: OPPORTUNITY_OBJECT })
+    objectInfo;
+
+    @wire(getPicklistValues, { recordTypeId: '$objectInfo.data.defaultRecordTypeId', fieldApiName: STAGENAME_FIELD })
+    stagePicklist;
+
+    @track activeAction = null;
 
     @track taskSubject = '';
     @track taskDueDate = '';
@@ -185,7 +181,7 @@ export default class OpportunityRadarCard extends NavigationMixin(LightningEleme
         if (!this.activeAction) {
             return 'action-wrapper';
         }
-		
+
         return this.activeAction === action
             ? 'action-wrapper action-wrapper--active'
             : 'action-wrapper action-wrapper--dimmed';
@@ -286,7 +282,7 @@ export default class OpportunityRadarCard extends NavigationMixin(LightningEleme
     }
 
     get stageOptions() {
-        return STAGE_OPTIONS;
+        return this.stagePicklist?.data?.values ?? [];
     }
 
     get isTaskActive() {

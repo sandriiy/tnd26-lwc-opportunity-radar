@@ -1,10 +1,11 @@
 import { LightningElement, track } from 'lwc';
+import { updateRecord } from 'lightning/uiRecordApi';
 import { enrichWithRisk } from 'c/opportunityRiskEngine';
 import getOpportunities from '@salesforce/apex/OpportunityRadarController.getOpportunities';
 import createFollowUpTask from '@salesforce/apex/OpportunityRadarController.createFollowUpTask';
-import updateNextStep from '@salesforce/apex/OpportunityRadarController.updateNextStep';
-import updateCloseDate from '@salesforce/apex/OpportunityRadarController.updateCloseDate';
-import updateStage from '@salesforce/apex/OpportunityRadarController.updateStage';
+import NEXTSTEP_FIELD from '@salesforce/schema/Opportunity.NextStep';
+import CLOSEDATE_FIELD from '@salesforce/schema/Opportunity.CloseDate';
+import STAGENAME_FIELD from '@salesforce/schema/Opportunity.StageName';
 
 const PAGE_SIZE = 20;
 
@@ -59,7 +60,7 @@ export default class OpportunityRadar extends LightningElement {
         const { opportunityId, subject, dueDate } = event.detail;
         try {
             await createFollowUpTask({ opportunityId, subject, dueDate });
-            await this.loadOpportunities();
+            this.patchOpportunity(opportunityId, { lastFollowUpDate: new Date().toISOString().split('T')[0] });
         } catch (error) {
             this.showError(error);
         }
@@ -68,8 +69,8 @@ export default class OpportunityRadar extends LightningElement {
     async handleUpdateNextStep(event) {
         const { opportunityId, nextStep } = event.detail;
         try {
-            await updateNextStep({ opportunityId, nextStep });
-            await this.loadOpportunities();
+            await updateRecord({ fields: { Id: opportunityId, [NEXTSTEP_FIELD.fieldApiName]: nextStep } });
+            this.patchOpportunity(opportunityId, { nextStep });
         } catch (error) {
             this.showError(error);
         }
@@ -78,8 +79,8 @@ export default class OpportunityRadar extends LightningElement {
     async handleUpdateCloseDate(event) {
         const { opportunityId, closeDate } = event.detail;
         try {
-            await updateCloseDate({ opportunityId, closeDate });
-            await this.loadOpportunities();
+            await updateRecord({ fields: { Id: opportunityId, [CLOSEDATE_FIELD.fieldApiName]: closeDate } });
+            this.patchOpportunity(opportunityId, { closeDate });
         } catch (error) {
             this.showError(error);
         }
@@ -88,8 +89,8 @@ export default class OpportunityRadar extends LightningElement {
     async handleUpdateStage(event) {
         const { opportunityId, stageName } = event.detail;
         try {
-            await updateStage({ opportunityId, stageName });
-            await this.loadOpportunities();
+            await updateRecord({ fields: { Id: opportunityId, [STAGENAME_FIELD.fieldApiName]: stageName } });
+            this.patchOpportunity(opportunityId, { stageName });
         } catch (error) {
             this.showError(error);
         }
@@ -103,6 +104,13 @@ export default class OpportunityRadar extends LightningElement {
         if (this.selectedOpportunityId === opportunityId) {
             this.selectedOpportunityId = null;
         }
+    }
+
+    patchOpportunity(id, fieldDelta) {
+        this.allOpportunities = this.allOpportunities.map(opp => {
+            if (opp.id !== id) return opp;
+            return enrichWithRisk({ ...opp, ...fieldDelta });
+        });
     }
 
     async loadOpportunities() {
