@@ -1,4 +1,6 @@
-import { LightningElement, api } from 'lwc';
+import { LightningElement } from 'lwc';
+import { fromContext } from '@lwc/state';
+import opportunityRadarState from 'c/opportunityRadarState';
 
 const RISK_OPTIONS = [
     { label: 'All', value: 'ALL' },
@@ -9,22 +11,22 @@ const RISK_OPTIONS = [
 ];
 
 export default class OpportunityRadarFilters extends LightningElement {
-    @api filters = {};
+    radarState = fromContext(opportunityRadarState);
 
     handleSearchChange(event) {
-        this.dispatchFilterChange({ search: event.target.value });
+        this.radarState.value.setFilter({ search: event.target.value });
     }
 
     handleRiskFilterChange(event) {
-        this.dispatchFilterChange({ riskFilter: event.detail.value });
+        this.radarState.value.setFilter({ riskFilter: event.detail.value });
     }
 
     handleCompactToggle(event) {
-        this.dispatchFilterChange({ compactView: event.target.checked });
+        this.radarState.value.setFilter({ compactView: event.target.checked });
     }
 
-    dispatchFilterChange(changed) {
-        this.dispatchEvent(new CustomEvent('filterchange', { detail: changed }));
+    get filters() {
+        return this.radarState.value.filters;
     }
 
     get riskOptions() {

@@ -1,211 +1,107 @@
-import { LightningElement, track } from 'lwc';
-import { updateRecord } from 'lightning/uiRecordApi';
-import { enrichWithRisk } from 'c/opportunityRiskEngine';
-import getOpportunities from '@salesforce/apex/OpportunityRadarController.getOpportunities';
-import createFollowUpTask from '@salesforce/apex/OpportunityRadarController.createFollowUpTask';
-import NEXTSTEP_FIELD from '@salesforce/schema/Opportunity.NextStep';
-import CLOSEDATE_FIELD from '@salesforce/schema/Opportunity.CloseDate';
-import STAGENAME_FIELD from '@salesforce/schema/Opportunity.StageName';
-
-const PAGE_SIZE = 20;
-
-const DEFAULT_FILTERS = {
-    search: '',
-    riskFilter: 'ALL',
-    compactView: false,
-    pageSize: PAGE_SIZE
-};
+import { LightningElement } from 'lwc';
+import opportunityRadarState from 'c/opportunityRadarState';
 
 export default class OpportunityRadar extends LightningElement {
-    @track allOpportunities = [];
-    @track snoozedIds = new Set();
-    @track selectedOpportunityId = null;
-    @track filters = { ...DEFAULT_FILTERS };
-    @track isLoading = false;
-    @track hasError = false;
-    @track errorMessage = '';
-    @track lastRefresh = null;
-    @track currentPage = 1;
+    radarState = opportunityRadarState();
 
     connectedCallback() {
-        this.loadOpportunities();
+        this.radarState.value.loadFeed();
     }
 
     handleRefresh() {
-        this.filters = { ...DEFAULT_FILTERS };
-        this.currentPage = 1;
-        this.loadOpportunities();
+        this.radarState.value.resetFilters();
+        this.radarState.value.loadFeed();
     }
 
     handleFilterChange(event) {
-        const changed = event.detail;
-        this.filters = { ...this.filters, ...changed };
-        this.currentPage = 1;
+        this.radarState.value.setFilter(event.detail);
     }
 
     handleLoadMore() {
-        this.currentPage += 1;
+        this.radarState.value.loadMore();
     }
 
     handleCardSelect(event) {
-        const { opportunityId } = event.detail;
-        this.selectedOpportunityId = this.selectedOpportunityId === opportunityId ? null : opportunityId;
+        this.radarState.value.selectCard(event.detail.opportunityId);
     }
 
     handleClosePanel() {
-        this.selectedOpportunityId = null;
+        this.radarState.value.dismissSelection();
     }
 
-    async handleCreateFollowUpTask(event) {
+    handleCreateFollowUpTask(event) {
         const { opportunityId, subject, dueDate } = event.detail;
-        try {
-            await createFollowUpTask({ opportunityId, subject, dueDate });
-            this.patchOpportunity(opportunityId, { lastFollowUpDate: new Date().toISOString().split('T')[0] });
-        } catch (error) {
-            this.showError(error);
-        }
+        this.radarState.value.createTask(opportunityId, subject, dueDate);
     }
 
-    async handleUpdateNextStep(event) {
+    handleUpdateNextStep(event) {
         const { opportunityId, nextStep } = event.detail;
-        try {
-            await updateRecord({ fields: { Id: opportunityId, [NEXTSTEP_FIELD.fieldApiName]: nextStep } });
-            this.patchOpportunity(opportunityId, { nextStep });
-        } catch (error) {
-            this.showError(error);
-        }
+        this.radarState.value.updateNextStep(opportunityId, nextStep);
     }
 
-    async handleUpdateCloseDate(event) {
+    handleUpdateCloseDate(event) {
         const { opportunityId, closeDate } = event.detail;
-        try {
-            await updateRecord({ fields: { Id: opportunityId, [CLOSEDATE_FIELD.fieldApiName]: closeDate } });
-            this.patchOpportunity(opportunityId, { closeDate });
-        } catch (error) {
-            this.showError(error);
-        }
+        this.radarState.value.updateCloseDate(opportunityId, closeDate);
     }
 
-    async handleUpdateStage(event) {
+    handleUpdateStage(event) {
         const { opportunityId, stageName } = event.detail;
-        try {
-            await updateRecord({ fields: { Id: opportunityId, [STAGENAME_FIELD.fieldApiName]: stageName } });
-            this.patchOpportunity(opportunityId, { stageName });
-        } catch (error) {
-            this.showError(error);
-        }
+        this.radarState.value.updateStage(opportunityId, stageName);
     }
 
     handleSnooze(event) {
-        const { opportunityId } = event.detail;
-        const updated = new Set(this.snoozedIds);
-        updated.add(opportunityId);
-        this.snoozedIds = updated;
-        if (this.selectedOpportunityId === opportunityId) {
-            this.selectedOpportunityId = null;
-        }
+        this.radarState.value.snoozeCard(event.detail.opportunityId);
     }
 
-    patchOpportunity(id, fieldDelta) {
-        this.allOpportunities = this.allOpportunities.map(opp => {
-            if (opp.id !== id) return opp;
-            return enrichWithRisk({ ...opp, ...fieldDelta });
-        });
-    }
-
-    async loadOpportunities() {
-        this.isLoading = true;
-        this.hasError = false;
-        this.errorMessage = '';
-        try {
-            const raw = await getOpportunities();
-            this.allOpportunities = raw.map(opp => enrichWithRisk({ ...opp, isSelected: false }));
-            this.lastRefresh = new Date().toLocaleTimeString();
-            this.currentPage = 1;
-        } catch (error) {
-            this.hasError = true;
-            this.errorMessage = error?.body?.message || 'Failed to load opportunities.';
-        } finally {
-            this.isLoading = false;
-        }
-    }
-
-    showError(error) {
-        this.hasError = true;
-        this.errorMessage = error?.body?.message || 'An error occurred.';
-    }
-
-    get filteredOpportunities() {
-        let result = this.allOpportunities.filter(opp => {
-            if (this.snoozedIds.has(opp.id)) {
-                return this.filters.riskFilter === 'SNOOZED';
-            }
-            if (this.filters.riskFilter === 'SNOOZED') {
-                return false;
-            }
-            if (this.filters.riskFilter !== 'ALL' && opp.riskLevel.toUpperCase() !== this.filters.riskFilter) {
-                return false;
-            }
-            if (this.filters.search) {
-                const term = this.filters.search.toLowerCase();
-                const matchesName = opp.name && opp.name.toLowerCase().includes(term);
-                const matchesAccount = opp.accountName && opp.accountName.toLowerCase().includes(term);
-                if (!matchesName && !matchesAccount) {
-                    return false;
-                }
-            }
-            return true;
-        });
-
-        result = result.slice().sort((a, b) => {
-            const order = { Critical: 0, Warning: 1, Healthy: 2 };
-            const aRank = order[a.riskLevel] ?? 3;
-            const bRank = order[b.riskLevel] ?? 3;
-            if (aRank !== bRank) {
-                return aRank - bRank;
-            }
-            return new Date(a.closeDate) - new Date(b.closeDate);
-        });
-
-        return result;
+    get filters() {
+        return this.radarState.value.filters;
     }
 
     get visibleOpportunities() {
-        const paginated = this.filteredOpportunities.slice(0, this.currentPage * this.filters.pageSize);
-        return paginated.map(opp => ({
-            ...opp,
-            isSelected: opp.id === this.selectedOpportunityId
-        }));
+        return this.radarState.value.visibleOpportunities;
     }
 
     get hasOpportunities() {
-        return this.filteredOpportunities.length > 0;
+        return this.radarState.value.hasOpportunities;
     }
 
     get canLoadMore() {
-        return this.filteredOpportunities.length > this.currentPage * this.filters.pageSize;
+        return this.radarState.value.canLoadMore;
     }
 
     get criticalCount() {
-        return this.allOpportunities.filter(o => o.riskLevel === 'Critical').length;
+        return this.radarState.value.criticalCount;
     }
 
     get warningCount() {
-        return this.allOpportunities.filter(o => o.riskLevel === 'Warning').length;
+        return this.radarState.value.warningCount;
     }
 
     get healthyCount() {
-        return this.allOpportunities.filter(o => o.riskLevel === 'Healthy').length;
+        return this.radarState.value.healthyCount;
     }
 
     get totalPipeline() {
-        return this.allOpportunities.reduce((sum, o) => sum + (o.amount || 0), 0);
+        return this.radarState.value.totalPipeline;
+    }
+
+    get lastRefresh() {
+        return this.radarState.value.lastRefresh;
+    }
+
+    get isLoading() {
+        return this.radarState.value.isLoading;
+    }
+
+    get hasError() {
+        return this.radarState.value.hasError;
+    }
+
+    get errorMessage() {
+        return this.radarState.value.errorMessage;
     }
 
     get selectedOpportunity() {
-        if (!this.selectedOpportunityId) {
-            return null;
-        }
-        return this.allOpportunities.find(o => o.id === this.selectedOpportunityId) || null;
+        return this.radarState.value.selectedOpportunity;
     }
 }

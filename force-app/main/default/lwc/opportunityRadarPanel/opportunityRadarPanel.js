@@ -1,8 +1,10 @@
-import { LightningElement, api, track } from 'lwc';
+import { LightningElement, track } from 'lwc';
+import { fromContext } from '@lwc/state';
 import { NavigationMixin } from 'lightning/navigation';
+import opportunityRadarState from 'c/opportunityRadarState';
 
 export default class OpportunityRadarPanel extends NavigationMixin(LightningElement) {
-    @api opportunity;
+    radarState = fromContext(opportunityRadarState);
 
     @track showNextStepForm = false;
     @track nextStepValue = '';
@@ -14,11 +16,11 @@ export default class OpportunityRadarPanel extends NavigationMixin(LightningElem
     }
 
     handleClose() {
-        this.dispatchEvent(new CustomEvent('closepanel'));
+        this.radarState.value.dismissSelection();
     }
 
     handleBackdropClick() {
-        this.dispatchEvent(new CustomEvent('closepanel'));
+        this.radarState.value.dismissSelection();
     }
 
     stopPropagation(event) {
@@ -35,12 +37,7 @@ export default class OpportunityRadarPanel extends NavigationMixin(LightningElem
     }
 
     handleSaveNextStep() {
-        this.dispatchEvent(new CustomEvent('updatenextstep', {
-            detail: {
-                opportunityId: this.opportunity.id,
-                nextStep: this.nextStepValue
-            }
-        }));
+        this.radarState.value.updateNextStep(this.opportunity.id, this.nextStepValue);
         this.showNextStepForm = false;
     }
 
@@ -57,13 +54,7 @@ export default class OpportunityRadarPanel extends NavigationMixin(LightningElem
     }
 
     handleCreateTask() {
-        this.dispatchEvent(new CustomEvent('createfollowtask', {
-            detail: {
-                opportunityId: this.opportunity.id,
-                subject: this.taskSubject,
-                dueDate: this.taskDueDate
-            }
-        }));
+        this.radarState.value.createTask(this.opportunity.id, this.taskSubject, this.taskDueDate);
         this.resetTaskForm();
     }
 
@@ -80,6 +71,10 @@ export default class OpportunityRadarPanel extends NavigationMixin(LightningElem
     resetTaskForm() {
         this.taskSubject = 'Follow up on ' + (this.opportunity?.name || '');
         this.taskDueDate = new Date().toISOString().split('T')[0];
+    }
+
+    get opportunity() {
+        return this.radarState.value.selectedOpportunity;
     }
 
     get formattedAmount() {

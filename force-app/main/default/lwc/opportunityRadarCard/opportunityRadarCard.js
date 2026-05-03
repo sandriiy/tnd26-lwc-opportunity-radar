@@ -1,8 +1,10 @@
 import { LightningElement, api, track, wire } from 'lwc';
+import { fromContext } from '@lwc/state';
 import { NavigationMixin } from 'lightning/navigation';
 import { getObjectInfo, getPicklistValues } from 'lightning/uiObjectInfoApi';
 import OPPORTUNITY_OBJECT from '@salesforce/schema/Opportunity';
 import STAGENAME_FIELD from '@salesforce/schema/Opportunity.StageName';
+import opportunityRadarState from 'c/opportunityRadarState';
 
 const RISK_BADGE_CLASSES = {
     Critical: 'risk-badge risk-badge-critical',
@@ -13,8 +15,7 @@ const RISK_BADGE_CLASSES = {
 
 export default class OpportunityRadarCard extends NavigationMixin(LightningElement) {
     @api opportunity;
-    @api isCompact = false;
-    @api isSelected = false;
+    radarState = fromContext(opportunityRadarState);
 
     @wire(getObjectInfo, { objectApiName: OPPORTUNITY_OBJECT })
     objectInfo;
@@ -31,9 +32,7 @@ export default class OpportunityRadarCard extends NavigationMixin(LightningEleme
     @track stageValue = '';
 
     handleCardClick() {
-        this.dispatchEvent(new CustomEvent('cardselect', {
-            detail: { opportunityId: this.opportunity.id }
-        }));
+        this.radarState.value.selectCard(this.opportunity.id);
     }
 
     stopPropagation(event) {
@@ -62,14 +61,7 @@ export default class OpportunityRadarCard extends NavigationMixin(LightningEleme
 
     handleSaveTask(event) {
         event.stopPropagation();
-        this.dispatchEvent(new CustomEvent('createfollowtask', {
-            detail: {
-                opportunityId: this.opportunity.id,
-                subject: this.taskSubject,
-                dueDate: this.taskDueDate
-            }
-        }));
-
+        this.radarState.value.createTask(this.opportunity.id, this.taskSubject, this.taskDueDate);
         this.activeAction = null;
     }
 
@@ -90,13 +82,7 @@ export default class OpportunityRadarCard extends NavigationMixin(LightningEleme
 
     handleSaveNextStep(event) {
         event.stopPropagation();
-        this.dispatchEvent(new CustomEvent('updatenextstep', {
-            detail: {
-                opportunityId: this.opportunity.id,
-                nextStep: this.nextStepValue
-            }
-        }));
-
+        this.radarState.value.updateNextStep(this.opportunity.id, this.nextStepValue);
         this.activeAction = null;
     }
 
@@ -117,13 +103,7 @@ export default class OpportunityRadarCard extends NavigationMixin(LightningEleme
 
     handleSaveCloseDate(event) {
         event.stopPropagation();
-        this.dispatchEvent(new CustomEvent('updateclosedate', {
-            detail: {
-                opportunityId: this.opportunity.id,
-                closeDate: this.closeDateValue
-            }
-        }));
-
+        this.radarState.value.updateCloseDate(this.opportunity.id, this.closeDateValue);
         this.activeAction = null;
     }
 
@@ -144,13 +124,7 @@ export default class OpportunityRadarCard extends NavigationMixin(LightningEleme
 
     handleSaveStage(event) {
         event.stopPropagation();
-        this.dispatchEvent(new CustomEvent('updatestage', {
-            detail: {
-                opportunityId: this.opportunity.id,
-                stageName: this.stageValue
-            }
-        }));
-
+        this.radarState.value.updateStage(this.opportunity.id, this.stageValue);
         this.activeAction = null;
     }
 
@@ -161,9 +135,7 @@ export default class OpportunityRadarCard extends NavigationMixin(LightningEleme
 
     handleSnooze(event) {
         event.stopPropagation();
-        this.dispatchEvent(new CustomEvent('snooze', {
-            detail: { opportunityId: this.opportunity.id }
-        }));
+        this.radarState.value.snoozeCard(this.opportunity.id);
     }
 
     handleOpenRecord(event) {
@@ -185,6 +157,14 @@ export default class OpportunityRadarCard extends NavigationMixin(LightningEleme
         return this.activeAction === action
             ? 'action-wrapper action-wrapper--active'
             : 'action-wrapper action-wrapper--dimmed';
+    }
+
+    get isCompact() {
+        return this.radarState.value.filters.compactView;
+    }
+
+    get isSelected() {
+        return this.radarState.value.selectedId === this.opportunity?.id;
     }
 
     get showDetails() {

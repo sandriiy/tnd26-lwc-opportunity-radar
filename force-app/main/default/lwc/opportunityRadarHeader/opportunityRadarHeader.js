@@ -1,25 +1,44 @@
-import { LightningElement, api } from 'lwc';
+import { LightningElement } from 'lwc';
+import { fromContext } from '@lwc/state';
+import opportunityRadarState from 'c/opportunityRadarState';
 
 export default class OpportunityRadarHeader extends LightningElement {
-    @api criticalCount = 0;
-    @api warningCount = 0;
-    @api healthyCount = 0;
-    @api totalPipeline = 0;
-    @api lastRefresh = null;
-    @api isLoading = false;
+    radarState = fromContext(opportunityRadarState);
 
     handleRefresh() {
-        this.dispatchEvent(new CustomEvent('refresh'));
+        this.radarState.value.resetFilters();
+        this.radarState.value.loadFeed();
+    }
+
+    get criticalCount() {
+        return this.radarState.value.criticalCount;
+    }
+
+    get warningCount() {
+        return this.radarState.value.warningCount;
+    }
+
+    get healthyCount() {
+        return this.radarState.value.healthyCount;
+    }
+
+    get totalPipeline() {
+        return this.radarState.value.totalPipeline;
+    }
+
+    get lastRefresh() {
+        return this.radarState.value.lastRefresh;
+    }
+
+    get isLoading() {
+        return this.radarState.value.isLoading;
     }
 
     get formattedPipeline() {
-        if (this.totalPipeline == null) {
-            return '$0';
-        } else if (this.totalPipeline >= 1_000_000) {
-            return '$' + (this.totalPipeline / 1_000_000).toFixed(1) + 'M';
-        } else if (this.totalPipeline >= 1_000) {
-            return '$' + (this.totalPipeline / 1_000).toFixed(0) + 'K';
-        }
-        return '$' + this.totalPipeline.toFixed(0);
+        const value = this.totalPipeline;
+        if (value == null) return '$0';
+        if (value >= 1_000_000) return '$' + (value / 1_000_000).toFixed(1) + 'M';
+        if (value >= 1_000) return '$' + (value / 1_000).toFixed(0) + 'K';
+        return '$' + value.toFixed(0);
     }
 }
