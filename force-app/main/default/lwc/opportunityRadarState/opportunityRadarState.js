@@ -6,6 +6,7 @@ import createFollowUpTask from '@salesforce/apex/OpportunityRadarController.crea
 import NEXTSTEP_FIELD from '@salesforce/schema/Opportunity.NextStep';
 import CLOSEDATE_FIELD from '@salesforce/schema/Opportunity.CloseDate';
 import STAGENAME_FIELD from '@salesforce/schema/Opportunity.StageName';
+import { readOpportunities, writeOpportunities, clearCache, markSynced } from 'c/opportunityRadarCache';
 
 const PAGE_SIZE = 20;
 
@@ -16,11 +17,77 @@ const DEFAULT_FILTERS = {
     pageSize: PAGE_SIZE
 };
 
+const PREF_KEYS = {
+    riskFilter: 'opportunityRadar:v1:riskFilter',
+    compactView: 'opportunityRadar:v1:compactView',
+    pageSize: 'opportunityRadar:v1:pageSize'
+};
+
+const SESSION_KEYS = {
+    selectedId: 'opportunityRadar:v1:selectedOpportunityId',
+    snoozedIds: 'opportunityRadar:v1:snoozedIds'
+};
+
+function readPreferences() {
+    try {
+        const saved = {};
+        const riskFilter = localStorage.getItem(PREF_KEYS.riskFilter);
+        const compactView = localStorage.getItem(PREF_KEYS.compactView);
+        const pageSize = localStorage.getItem(PREF_KEYS.pageSize);
+        if (riskFilter) saved.riskFilter = riskFilter;
+        if (compactView !== null) saved.compactView = compactView === 'true';
+        if (pageSize !== null) saved.pageSize = Number(pageSize);
+        return saved;
+    } catch (e) {
+        return {};
+    }
+}
+
+function persistPreferences(f) {
+    try {
+        localStorage.setItem(PREF_KEYS.riskFilter, f.riskFilter);
+        localStorage.setItem(PREF_KEYS.compactView, String(f.compactView));
+        localStorage.setItem(PREF_KEYS.pageSize, String(f.pageSize));
+    } catch (e) {}
+}
+
+function readSession() {
+    try {
+        const sid = sessionStorage.getItem(SESSION_KEYS.selectedId);
+        const snoozedRaw = sessionStorage.getItem(SESSION_KEYS.snoozedIds);
+        return {
+            selectedId: sid || null,
+            snoozedIds: snoozedRaw ? JSON.parse(snoozedRaw) : []
+        };
+    } catch (e) {
+        return { selectedId: null, snoozedIds: [] };
+    }
+}
+
+function persistSelectedId(id) {
+    try {
+        if (id) {
+            sessionStorage.setItem(SESSION_KEYS.selectedId, id);
+        } else {
+            sessionStorage.removeItem(SESSION_KEYS.selectedId);
+        }
+    } catch (e) {}
+}
+
+function persistSnoozedIds(ids) {
+    try {
+        sessionStorage.setItem(SESSION_KEYS.snoozedIds, JSON.stringify(ids));
+    } catch (e) {}
+}
+
 export default defineState(({ atom, computed, setAtom }) => {
+    const savedPrefs = readPreferences();
+    const savedSession = readSession();
+
     const allOpportunities = atom([]);
-    const snoozedIds = atom([]);
-    const selectedId = atom(null);
-    const filters = atom({ ...DEFAULT_FILTERS });
+    const snoozedIds = atom(savedSession.snoozedIds);
+    const selectedId = atom(savedSession.selectedId);
+    const filters = atom({ ...DEFAULT_FILTERS, ...savedPrefs });
     const isLoading = atom(false);
     const hasError = atom(false);
     const errorMessage = atom('');
@@ -109,37 +176,66 @@ export default defineState(({ atom, computed, setAtom }) => {
     };
 
     const loadFeed = async () => {
-        setAtom(isLoading, true);
         setAtom(hasError, false);
         setAtom(errorMessage, '');
+        setAtom(currentPage, 1);
+
+        let hasCachedData = false;
+        try {
+            const cached = await readOpportunities();
+            if (cached.length > 0) {
+                setAtom(allOpportunities, cached);
+                hasCachedData = true;
+            }
+        } catch (e) {}
+
+        if (!hasCachedData) {
+            setAtom(isLoading, true);
+        }
+
         try {
             const raw = await getOpportunities();
-            setAtom(allOpportunities, raw.map(opp => enrichWithRisk({ ...opp, isSelected: false })));
+            const enriched = raw.map(opp => enrichWithRisk({ ...opp, isSelected: false }));
+            setAtom(allOpportunities, enriched);
             setAtom(lastRefresh, new Date().toLocaleTimeString());
-            setAtom(currentPage, 1);
+            try {
+                await writeOpportunities(enriched);
+                markSynced();
+            } catch (e) {}
         } catch (error) {
-            showError(error);
+            const statusCode = error?.body?.statusCode;
+            if (statusCode === 401 || statusCode === 403) {
+                try { await clearCache(); } catch (e) {}
+            }
+            if (!hasCachedData) {
+                showError(error);
+            }
         } finally {
             setAtom(isLoading, false);
         }
     };
 
     const resetFilters = () => {
-        setAtom(filters, { ...DEFAULT_FILTERS });
+        setAtom(filters, { ...DEFAULT_FILTERS, ...readPreferences() });
         setAtom(currentPage, 1);
     };
 
     const setFilter = (delta) => {
-        setAtom(filters, { ...filters.value, ...delta });
+        const next = { ...filters.value, ...delta };
+        setAtom(filters, next);
         setAtom(currentPage, 1);
+        persistPreferences(next);
     };
 
     const selectCard = (id) => {
-        setAtom(selectedId, selectedId.value === id ? null : id);
+        const next = selectedId.value === id ? null : id;
+        setAtom(selectedId, next);
+        persistSelectedId(next);
     };
 
     const dismissSelection = () => {
         setAtom(selectedId, null);
+        persistSelectedId(null);
     };
 
     const loadMore = () => {
@@ -150,7 +246,11 @@ export default defineState(({ atom, computed, setAtom }) => {
         const updated = [...snoozedIds.value];
         if (!updated.includes(id)) updated.push(id);
         setAtom(snoozedIds, updated);
-        if (selectedId.value === id) setAtom(selectedId, null);
+        persistSnoozedIds(updated);
+        if (selectedId.value === id) {
+            setAtom(selectedId, null);
+            persistSelectedId(null);
+        }
     };
 
     const createTask = async (opportunityId, subject, dueDate) => {
