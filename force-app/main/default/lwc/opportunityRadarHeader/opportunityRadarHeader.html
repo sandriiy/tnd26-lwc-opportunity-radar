@@ -4,6 +4,12 @@
             <h1 class="header-title">Opportunity Radar</h1>
             <div class="slds-grid slds-grid_vertical-align-center">
                 <span class="slds-text-body_small slds-text-color_weak slds-m-right_x-small" lwc:if={lastRefresh}>Last refreshed: {lastRefresh}</span>
+                <template lwc:if={isSyncing}>
+                    <span class="slds-badge slds-badge_lightest slds-m-right_x-small">Syncing...</span>
+                </template>
+                <template lwc:elseif={syncComplete}>
+                    <span class="slds-badge slds-badge_success slds-m-right_x-small">Synced</span>
+                </template>
                 <lightning-button-icon
                     icon-name="utility:refresh"
                     alternative-text="Refresh"
@@ -11,6 +17,15 @@
                     variant="border-filled"
                     disabled={isLoading}
                     onclick={handleRefresh}
+                ></lightning-button-icon>
+                <lightning-button-icon
+                    icon-name="utility:delete"
+                    alternative-text="Hard Refresh (clear cache)"
+                    title="Hard Refresh — clears local cache and reloads all data from Salesforce"
+                    variant="border-filled"
+                    disabled={isLoading}
+                    onclick={handleHardRefresh}
+                    class="slds-m-left_x-small"
                 ></lightning-button-icon>
             </div>
         </div>

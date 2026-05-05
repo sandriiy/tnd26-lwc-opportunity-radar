@@ -1,21 +1,31 @@
 const DB_NAME = 'opportunityRadar';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const STORE_NAME = 'opportunities';
-const FRESHNESS_KEY = 'opportunityRadar:v1:lastSyncedAt';
-const FRESHNESS_TTL_MS = 2 * 60 * 1000;
+
+let dbPromise = null;
 
 function openDB() {
-    return new Promise((resolve, reject) => {
+    if (dbPromise) return dbPromise;
+    dbPromise = new Promise((resolve, reject) => {
         const request = indexedDB.open(DB_NAME, DB_VERSION);
         request.onupgradeneeded = (event) => {
             const db = event.target.result;
-            if (!db.objectStoreNames.contains(STORE_NAME)) {
-                db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+            if (db.objectStoreNames.contains(STORE_NAME)) {
+                db.deleteObjectStore(STORE_NAME);
             }
+            db.createObjectStore(STORE_NAME, { keyPath: 'id' });
         };
         request.onsuccess = (event) => resolve(event.target.result);
-        request.onerror = (event) => reject(event.target.error);
+        request.onerror = (event) => {
+            dbPromise = null;
+            reject(event.target.error);
+        };
+        request.onblocked = () => {
+            dbPromise = null;
+            reject(new Error('IndexedDB upgrade blocked. Please close other tabs running this app and reload.'));
+        };
     });
+    return dbPromise;
 }
 
 async function readOpportunities() {
@@ -28,20 +38,18 @@ async function readOpportunities() {
     });
 }
 
-async function writeOpportunities(records) {
+async function mergeOpportunities(records) {
     const db = await openDB();
     return new Promise((resolve, reject) => {
         const tx = db.transaction(STORE_NAME, 'readwrite');
         const store = tx.objectStore(STORE_NAME);
-        store.clear();
         records.forEach(record => store.put(record));
         tx.oncomplete = () => resolve();
         tx.onerror = (event) => reject(event.target.error);
     });
 }
 
-async function clearCache() {
-    const db = await openDB();
+async function clearCache() {    const db = await openDB();
     return new Promise((resolve, reject) => {
         const tx = db.transaction(STORE_NAME, 'readwrite');
         tx.objectStore(STORE_NAME).clear();
@@ -50,19 +58,16 @@ async function clearCache() {
     });
 }
 
-function isFresh() {
-    try {
-        const ts = localStorage.getItem(FRESHNESS_KEY);
-        return ts !== null && (Date.now() - Number(ts)) < FRESHNESS_TTL_MS;
-    } catch (e) {
-        return false;
-    }
+async function evictFromCache(ids) {
+    if (!ids || ids.length === 0) return;
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE_NAME, 'readwrite');
+        const store = tx.objectStore(STORE_NAME);
+        ids.forEach(id => store.delete(id));
+        tx.oncomplete = () => resolve();
+        tx.onerror = (event) => reject(event.target.error);
+    });
 }
 
-function markSynced() {
-    try {
-        localStorage.setItem(FRESHNESS_KEY, String(Date.now()));
-    } catch (e) {}
-}
-
-export { readOpportunities, writeOpportunities, clearCache, isFresh, markSynced };
+export { readOpportunities, mergeOpportunities, evictFromCache, clearCache };

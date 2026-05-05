@@ -1,14 +1,18 @@
 import { defineState } from '@lwc/state';
 import { updateRecord } from 'lightning/uiRecordApi';
 import { enrichWithRisk } from 'c/opportunityRiskEngine';
-import getOpportunities from '@salesforce/apex/OpportunityRadarController.getOpportunities';
+import getOpportunitiesPage from '@salesforce/apex/OpportunityRadarController.getOpportunitiesPage';
+import getOpportunitiesByIds from '@salesforce/apex/OpportunityRadarController.getOpportunitiesByIds';
+import getSingleOpportunity from '@salesforce/apex/OpportunityRadarController.getSingleOpportunity';
+import searchOpportunities from '@salesforce/apex/OpportunityRadarController.searchOpportunities';
 import createFollowUpTask from '@salesforce/apex/OpportunityRadarController.createFollowUpTask';
 import NEXTSTEP_FIELD from '@salesforce/schema/Opportunity.NextStep';
 import CLOSEDATE_FIELD from '@salesforce/schema/Opportunity.CloseDate';
 import STAGENAME_FIELD from '@salesforce/schema/Opportunity.StageName';
-import { readOpportunities, writeOpportunities, clearCache, markSynced } from 'c/opportunityRadarCache';
+import { readOpportunities, mergeOpportunities, evictFromCache, clearCache } from 'c/opportunityRadarCache';
 
 const PAGE_SIZE = 20;
+const CURSOR_BATCH_SIZE = 200;
 
 const DEFAULT_FILTERS = {
     search: '',
@@ -80,6 +84,33 @@ function persistSnoozedIds(ids) {
     } catch (e) {}
 }
 
+const RISK_ORDER = { Critical: 0, Warning: 1, Healthy: 2 };
+
+function sortByRisk(records) {
+    return [...records].sort((a, b) => {
+        const aRank = RISK_ORDER[a.riskLevel] ?? 3;
+        const bRank = RISK_ORDER[b.riskLevel] ?? 3;
+        if (aRank !== bRank) return aRank - bRank;
+        const dateSort = new Date(a.closeDate) - new Date(b.closeDate);
+        if (dateSort !== 0) return dateSort;
+        return a.id < b.id ? -1 : 1;
+    });
+}
+
+function mergeServerRecords(byId, enriched) {
+    for (const opp of enriched) {
+        const existing = byId.get(opp.id);
+        if (existing?._localVersion) {
+            const serverMs = opp.lastModifiedDate ? new Date(opp.lastModifiedDate).getTime() : 0;
+            if (serverMs > existing._localVersion) {
+                byId.set(opp.id, opp);
+            }
+        } else {
+            byId.set(opp.id, opp);
+        }
+    }
+}
+
 export default defineState(({ atom, computed, setAtom }) => {
     const savedPrefs = readPreferences();
     const savedSession = readSession();
@@ -93,6 +124,13 @@ export default defineState(({ atom, computed, setAtom }) => {
     const errorMessage = atom('');
     const lastRefresh = atom(null);
     const currentPage = atom(1);
+    const isSyncing = atom(false);
+    const syncComplete = atom(false);
+    const cursorState = atom(null);
+    const pendingToast = atom(null);
+    const isSearching = atom(false);
+    const serverSearchDone = atom(false);
+    const refreshingIds = atom(new Set());
 
     const filteredOpportunities = computed(
         [allOpportunities, snoozedIds, filters],
@@ -110,20 +148,18 @@ export default defineState(({ atom, computed, setAtom }) => {
                 }
                 return true;
             });
-            return result.slice().sort((a, b) => {
-                const order = { Critical: 0, Warning: 1, Healthy: 2 };
-                const aRank = order[a.riskLevel] ?? 3;
-                const bRank = order[b.riskLevel] ?? 3;
-                if (aRank !== bRank) return aRank - bRank;
-                return new Date(a.closeDate) - new Date(b.closeDate);
-            });
+            return sortByRisk(result);
         }
     );
 
     const visibleOpportunities = computed(
-        [filteredOpportunities, currentPage, filters, selectedId],
-        (filtered, page, f, sid) =>
-            filtered.slice(0, page * f.pageSize).map(opp => ({ ...opp, isSelected: opp.id === sid }))
+        [filteredOpportunities, currentPage, filters, selectedId, refreshingIds],
+        (filtered, page, f, sid, rIds) =>
+            filtered.slice(0, page * f.pageSize).map(opp => ({
+                ...opp,
+                isSelected: opp.id === sid,
+                isRefreshing: rIds.has(opp.id)
+            }))
     );
 
     const hasOpportunities = computed(
@@ -132,8 +168,8 @@ export default defineState(({ atom, computed, setAtom }) => {
     );
 
     const canLoadMore = computed(
-        [filteredOpportunities, currentPage, filters],
-        (filtered, page, f) => filtered.length > page * f.pageSize
+        [filteredOpportunities, currentPage, filters, cursorState, isSyncing],
+        (filtered, page, f, cs, syncing) => filtered.length > page * f.pageSize || (cs !== null && !syncing)
     );
 
     const criticalCount = computed(
@@ -166,53 +202,96 @@ export default defineState(({ atom, computed, setAtom }) => {
         setAtom(errorMessage, error?.body?.message || 'An error occurred.');
     };
 
-    const patchOpportunity = (id, fieldDelta) => {
-        setAtom(
-            allOpportunities,
-            allOpportunities.value.map(opp =>
-                opp.id !== id ? opp : enrichWithRisk({ ...opp, ...fieldDelta })
-            )
-        );
+    const showToast = (variant, title, message) => {
+        setAtom(pendingToast, { variant, title, message });
     };
 
-    const loadFeed = async () => {
-        setAtom(hasError, false);
-        setAtom(errorMessage, '');
-        setAtom(currentPage, 1);
+    const clearToast = () => {
+        setAtom(pendingToast, null);
+    };
 
-        let hasCachedData = false;
-        try {
-            const cached = await readOpportunities();
-            if (cached.length > 0) {
-                setAtom(allOpportunities, cached);
-                hasCachedData = true;
-            }
-        } catch (e) {}
-
-        if (!hasCachedData) {
-            setAtom(isLoading, true);
+    const patchOpportunity = (id, fieldDelta) => {
+        const now = Date.now();
+        const updated = allOpportunities.value.map(opp =>
+            opp.id !== id ? opp : enrichWithRisk({ ...opp, ...fieldDelta, _localVersion: now })
+        );
+        setAtom(allOpportunities, updated);
+        const patched = updated.find(o => o.id === id);
+        if (patched) {
+            mergeOpportunities([patched]).catch(() => {});
         }
+    };
 
+    const fetchNextBatch = async (cs) => {
+        setAtom(isSyncing, true);
+        const cursor = cs?.cursor ?? null;
+        const nextIndex = cs?.nextIndex ?? 0;
         try {
-            const raw = await getOpportunities();
-            const enriched = raw.map(opp => enrichWithRisk({ ...opp, isSelected: false }));
-            setAtom(allOpportunities, enriched);
+            const page = await getOpportunitiesPage({ cursor, nextIndex, batchSize: CURSOR_BATCH_SIZE });
+            const enriched = page.records.map(opp => enrichWithRisk(opp));
+            const byId = new Map(allOpportunities.value.map(o => [o.id, o]));
+            mergeServerRecords(byId, enriched);
+            setAtom(allOpportunities, Array.from(byId.values()));
+            setAtom(cursorState, page.hasMore ? { cursor: page.cursor, nextIndex: page.nextIndex } : null);
+            mergeOpportunities(enriched).catch(() => {});
             setAtom(lastRefresh, new Date().toLocaleTimeString());
-            try {
-                await writeOpportunities(enriched);
-                markSynced();
-            } catch (e) {}
+            setAtom(syncComplete, true);
         } catch (error) {
             const statusCode = error?.body?.statusCode;
             if (statusCode === 401 || statusCode === 403) {
                 try { await clearCache(); } catch (e) {}
             }
-            if (!hasCachedData) {
+            if (allOpportunities.value.length === 0) {
                 showError(error);
+            } else {
+                showToast('warning', 'Load Incomplete', 'Could not reach Salesforce. Showing cached data.');
             }
         } finally {
+            setAtom(isSyncing, false);
             setAtom(isLoading, false);
         }
+    };
+
+    const refreshPageByIds = async (ids) => {
+        if (!ids || ids.length === 0) return;
+        try {
+            const records = await getOpportunitiesByIds({ opportunityIds: ids });
+            const returnedIdSet = new Set(records.map(r => r.id));
+            const staleIdSet = new Set(ids.filter(id => !returnedIdSet.has(id)));
+            const enriched = records.map(r => enrichWithRisk(r));
+            const byId = new Map(
+                allOpportunities.value.filter(o => !staleIdSet.has(o.id)).map(o => [o.id, o])
+            );
+            mergeServerRecords(byId, enriched);
+            setAtom(allOpportunities, Array.from(byId.values()));
+            if (enriched.length > 0) mergeOpportunities(enriched).catch(() => {});
+            if (staleIdSet.size > 0) evictFromCache(Array.from(staleIdSet)).catch(() => {});
+        } catch (e) {}
+    };
+
+    const loadFeed = async () => {
+        resetFilters();
+        setAtom(hasError, false);
+        setAtom(errorMessage, '');
+        setAtom(cursorState, null);
+        setAtom(syncComplete, false);
+        setAtom(serverSearchDone, false);
+
+        let cachedRecords = [];
+        try { cachedRecords = await readOpportunities(); } catch (e) {}
+
+        if (cachedRecords.length > 0) {
+            setAtom(allOpportunities, cachedRecords);
+            setAtom(isLoading, false);
+            const firstPageIds = filteredOpportunities.value
+                .slice(0, filters.value.pageSize)
+                .map(o => o.id);
+            refreshPageByIds(firstPageIds);
+        } else {
+            setAtom(isLoading, true);
+        }
+
+        fetchNextBatch(null);
     };
 
     const resetFilters = () => {
@@ -225,6 +304,9 @@ export default defineState(({ atom, computed, setAtom }) => {
         setAtom(filters, next);
         setAtom(currentPage, 1);
         persistPreferences(next);
+        if ('search' in delta) {
+            setAtom(serverSearchDone, false);
+        }
     };
 
     const selectCard = (id) => {
@@ -239,7 +321,20 @@ export default defineState(({ atom, computed, setAtom }) => {
     };
 
     const loadMore = () => {
-        setAtom(currentPage, currentPage.value + 1);
+        const nextPage = currentPage.value + 1;
+        setAtom(currentPage, nextPage);
+
+        const pageSize = filters.value.pageSize;
+        const filtered = filteredOpportunities.value;
+        const start = (nextPage - 1) * pageSize;
+        const end = nextPage * pageSize;
+
+        const pageIds = filtered.slice(start, Math.min(end, filtered.length)).map(o => o.id);
+        if (pageIds.length > 0) refreshPageByIds(pageIds);
+
+        if (filtered.length <= end && cursorState.value !== null && !isSyncing.value) {
+            fetchNextBatch(cursorState.value);
+        }
     };
 
     const snoozeCard = (id) => {
@@ -257,8 +352,9 @@ export default defineState(({ atom, computed, setAtom }) => {
         try {
             await createFollowUpTask({ opportunityId, subject, dueDate });
             patchOpportunity(opportunityId, { lastFollowUpDate: new Date().toISOString().split('T')[0] });
+            showToast('success', 'Task Created', 'Follow-up task created successfully.');
         } catch (error) {
-            showError(error);
+            showToast('error', 'Task Failed', error?.body?.message || 'Failed to create task.');
         }
     };
 
@@ -267,7 +363,7 @@ export default defineState(({ atom, computed, setAtom }) => {
             await updateRecord({ fields: { Id: opportunityId, [NEXTSTEP_FIELD.fieldApiName]: nextStep } });
             patchOpportunity(opportunityId, { nextStep });
         } catch (error) {
-            showError(error);
+            showToast('error', 'Update Failed', error?.body?.message || 'Failed to update next step.');
         }
     };
 
@@ -276,7 +372,7 @@ export default defineState(({ atom, computed, setAtom }) => {
             await updateRecord({ fields: { Id: opportunityId, [CLOSEDATE_FIELD.fieldApiName]: closeDate } });
             patchOpportunity(opportunityId, { closeDate });
         } catch (error) {
-            showError(error);
+            showToast('error', 'Update Failed', error?.body?.message || 'Failed to update close date.');
         }
     };
 
@@ -285,21 +381,67 @@ export default defineState(({ atom, computed, setAtom }) => {
             await updateRecord({ fields: { Id: opportunityId, [STAGENAME_FIELD.fieldApiName]: stageName } });
             patchOpportunity(opportunityId, { stageName });
         } catch (error) {
-            showError(error);
+            showToast('error', 'Update Failed', error?.body?.message || 'Failed to update stage.');
+        }
+    };
+
+    const serverSearch = async (term) => {
+        const trimmed = (term || '').trim();
+        if (trimmed.length < 2) return;
+        setAtom(isSearching, true);
+        try {
+            const records = await searchOpportunities({ searchTerm: trimmed });
+            const enriched = records.map(r => enrichWithRisk(r));
+            const byId = new Map(allOpportunities.value.map(o => [o.id, o]));
+            mergeServerRecords(byId, enriched);
+            setAtom(allOpportunities, Array.from(byId.values()));
+            mergeOpportunities(enriched).catch(() => {});
+            setAtom(serverSearchDone, true);
+        } catch (e) {} finally {
+            setAtom(isSearching, false);
+        }
+    };
+
+    const hardRefresh = async () => {
+        resetFilters();
+        setAtom(hasError, false);
+        setAtom(errorMessage, '');
+        setAtom(cursorState, null);
+        setAtom(syncComplete, false);
+        setAtom(serverSearchDone, false);
+        setAtom(allOpportunities, []);
+        setAtom(isLoading, true);
+        try { await clearCache(); } catch (e) {}
+        fetchNextBatch(null);
+    };
+
+    const refreshCard = async (opportunityId) => {
+        const rIds = new Set(refreshingIds.value);
+        rIds.add(opportunityId);
+        setAtom(refreshingIds, rIds);
+        try {
+            const record = await getSingleOpportunity({ opportunityId });
+            const enriched = enrichWithRisk(record);
+            const updated = allOpportunities.value.map(opp => opp.id === opportunityId ? enriched : opp);
+            setAtom(allOpportunities, updated);
+            mergeOpportunities([enriched]).catch(() => {});
+            showToast('success', 'Record Refreshed', enriched.name + ' has been updated.');
+        } catch (error) {
+            showToast('error', 'Refresh Failed', error?.body?.message || 'Failed to refresh record.');
+        } finally {
+            const after = new Set(refreshingIds.value);
+            after.delete(opportunityId);
+            setAtom(refreshingIds, after);
         }
     };
 
     return {
-        allOpportunities,
-        snoozedIds,
         selectedId,
         filters,
         isLoading,
         hasError,
         errorMessage,
         lastRefresh,
-        currentPage,
-        filteredOpportunities,
         visibleOpportunities,
         hasOpportunities,
         canLoadMore,
@@ -309,17 +451,23 @@ export default defineState(({ atom, computed, setAtom }) => {
         totalPipeline,
         selectedOpportunity,
         loadFeed,
-        resetFilters,
         setFilter,
         selectCard,
         dismissSelection,
         loadMore,
         snoozeCard,
-        patchOpportunity,
         createTask,
         updateNextStep,
         updateCloseDate,
         updateStage,
-        showError
+        isSyncing,
+        syncComplete,
+        isSearching,
+        serverSearchDone,
+        pendingToast,
+        clearToast,
+        hardRefresh,
+        refreshCard,
+        serverSearch
     };
 });

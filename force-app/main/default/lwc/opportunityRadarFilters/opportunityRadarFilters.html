@@ -2,15 +2,18 @@
     <div class="radar-filters">
         <div class="slds-grid slds-grid_vertical-align-center slds-grid_align-spread">
             <div class="slds-col slds-shrink slds-grid slds-grid_vertical-align-center">
-                <div class="filter-search-col">
-                    <lightning-input
-                        type="search"
-                        label="Search"
-                        variant="label-hidden"
-                        placeholder="Search by deal or account..."
-                        value={filters.search}
-                        onchange={handleSearchChange}>
-                    </lightning-input>
+                <div class="search-group">
+                    <div class="search-input-wrapper">
+                        <lightning-input
+                            type="search"
+                            label="Search"
+                            variant="label-hidden"
+                            placeholder="Search by deal or account..."
+                            value={filters.search}
+                            onchange={handleSearchChange}
+                            onkeydown={handleSearchKeyDown}
+                        ></lightning-input>
+                    </div>
                 </div>
                 <div class="slds-grid slds-grid_vertical-align-center slds-m-left_medium">
                     <span class="filter-label slds-m-right_x-small">Risk</span>
@@ -32,6 +35,17 @@
                 </lightning-input>
             </div>
         </div>
+        <template lwc:if={showHint}>
+            <div class="server-search-hint">
+                <template lwc:if={isSearching}>
+                    <lightning-spinner size="x-small" alternative-text="Searching..."></lightning-spinner>
+                    Searching Salesforce...
+                </template>
+                <template lwc:else>
+                    Showing local results — <button class="link-btn" onclick={handleServerAction}>Search all records in Salesforce</button>
+                </template>
+            </div>
+        </template>
     </div>
 </template>
 

@@ -21,6 +21,10 @@
     padding: 0.75rem 1.25rem;
 }
 
+.radar-card--refreshing {
+    opacity: 0.55;
+}
+
 .card-title-group {
     display: flex;
     flex-direction: column;

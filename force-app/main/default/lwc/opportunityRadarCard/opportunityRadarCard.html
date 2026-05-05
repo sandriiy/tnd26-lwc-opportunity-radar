@@ -52,6 +52,7 @@
                         title="Create follow-up task"
                         alternative-text="Create follow-up task"
                         size="small"
+                        disabled={isRefreshing}
                         onclick={handleShowTaskForm}
                     ></lightning-button-icon>
                 </span>
@@ -61,6 +62,7 @@
                         title="Update next step"
                         alternative-text="Update next step"
                         size="small"
+                        disabled={isRefreshing}
                         onclick={handleShowNextStepForm}
                     ></lightning-button-icon>
                 </span>
@@ -70,6 +72,7 @@
                         title="Update close date"
                         alternative-text="Update close date"
                         size="small"
+                        disabled={isRefreshing}
                         onclick={handleShowCloseDateForm}
                     ></lightning-button-icon>
                 </span>
@@ -79,6 +82,7 @@
                         title="Update stage"
                         alternative-text="Update stage"
                         size="small"
+                        disabled={isRefreshing}
                         onclick={handleShowStageForm}
                     ></lightning-button-icon>
                 </span>
@@ -88,6 +92,7 @@
                         title="Snooze"
                         alternative-text="Snooze"
                         size="small"
+                        disabled={isRefreshing}
                         onclick={handleSnooze}
                     ></lightning-button-icon>
                 </span>
@@ -96,7 +101,16 @@
                         title="Open opportunity"
                         alternative-text="Open opportunity"
                         size="small"
+                        disabled={isRefreshing}
                         onclick={handleOpenRecord}
+                    ></lightning-button-icon>
+                <lightning-button-icon
+                        icon-name="utility:refresh"
+                        title="Refresh from Salesforce"
+                        alternative-text="Refresh from Salesforce"
+                        size="small"
+                        disabled={isRefreshing}
+                        onclick={handleRefreshCard}
                     ></lightning-button-icon>
             </div>
 
@@ -116,8 +130,8 @@
                         value={taskDueDate}
                         onchange={handleTaskDueDateChange}
                     ></lightning-input>
-                    <lightning-button label="Save" variant="brand" size="small" onclick={handleSaveTask}></lightning-button>
-                    <lightning-button label="Cancel" size="small" onclick={handleCancelAction}></lightning-button>
+                    <lightning-button label="Save" variant="brand" onclick={handleSaveTask}></lightning-button>
+                    <lightning-button label="Cancel" onclick={handleCancelAction}></lightning-button>
                 </div>
             </template>
 
@@ -130,8 +144,8 @@
                         value={nextStepValue}
                         onchange={handleNextStepChange}
                     ></lightning-input>
-                    <lightning-button label="Save" variant="brand" size="small" onclick={handleSaveNextStep}></lightning-button>
-                    <lightning-button label="Cancel" size="small" onclick={handleCancelAction}></lightning-button>
+                    <lightning-button label="Save" variant="brand" onclick={handleSaveNextStep}></lightning-button>
+                    <lightning-button label="Cancel" onclick={handleCancelAction}></lightning-button>
                 </div>
             </template>
 
@@ -144,8 +158,8 @@
                         value={closeDateValue}
                         onchange={handleCloseDateChange}
                     ></lightning-input>
-                    <lightning-button label="Save" variant="brand" size="small" onclick={handleSaveCloseDate}></lightning-button>
-                    <lightning-button label="Cancel" size="small" onclick={handleCancelAction}></lightning-button>
+                    <lightning-button label="Save" variant="brand" onclick={handleSaveCloseDate}></lightning-button>
+                    <lightning-button label="Cancel" onclick={handleCancelAction}></lightning-button>
                 </div>
             </template>
 
@@ -158,8 +172,8 @@
                         options={stageOptions}
                         onchange={handleStageChange}
                     ></lightning-combobox>
-                    <lightning-button label="Save" variant="brand" size="small" onclick={handleSaveStage}></lightning-button>
-                    <lightning-button label="Cancel" size="small" onclick={handleCancelAction}></lightning-button>
+                    <lightning-button label="Save" variant="brand" onclick={handleSaveStage}></lightning-button>
+                    <lightning-button label="Cancel" onclick={handleCancelAction}></lightning-button>
                 </div>
             </template>
         </div>

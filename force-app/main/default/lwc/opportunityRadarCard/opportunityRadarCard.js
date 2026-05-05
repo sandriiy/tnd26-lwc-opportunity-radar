@@ -149,6 +149,11 @@ export default class OpportunityRadarCard extends NavigationMixin(LightningEleme
         });
     }
 
+    handleRefreshCard(event) {
+        event.stopPropagation();
+        this.radarState.value.refreshCard(this.opportunity.id);
+    }
+
     actionWrapperClass(action) {
         if (!this.activeAction) {
             return 'action-wrapper';
@@ -163,23 +168,19 @@ export default class OpportunityRadarCard extends NavigationMixin(LightningEleme
         return this.radarState.value.filters.compactView;
     }
 
-    get isSelected() {
-        return this.radarState.value.selectedId === this.opportunity?.id;
-    }
-
     get showDetails() {
         return !this.isCompact;
     }
 
+    get isRefreshing() {
+        return this.opportunity?.isRefreshing === true;
+    }
+
     get cardClass() {
         let classes = 'radar-card';
-        if (this.isSelected) {
-            classes += ' radar-card--selected';
-        }
-        if (this.isCompact) {
-            classes += ' radar-card--compact';
-        }
-
+        if (this.opportunity?.isSelected) classes += ' radar-card--selected';
+        if (this.isCompact) classes += ' radar-card--compact';
+        if (this.isRefreshing) classes += ' radar-card--refreshing';
         return classes;
     }
 

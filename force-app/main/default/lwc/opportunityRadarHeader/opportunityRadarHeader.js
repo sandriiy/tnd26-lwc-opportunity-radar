@@ -6,8 +6,11 @@ export default class OpportunityRadarHeader extends LightningElement {
     radarState = fromContext(opportunityRadarState);
 
     handleRefresh() {
-        this.radarState.value.resetFilters();
         this.radarState.value.loadFeed();
+    }
+
+    handleHardRefresh() {
+        this.radarState.value.hardRefresh();
     }
 
     get criticalCount() {
@@ -40,5 +43,13 @@ export default class OpportunityRadarHeader extends LightningElement {
         if (value >= 1_000_000) return '$' + (value / 1_000_000).toFixed(1) + 'M';
         if (value >= 1_000) return '$' + (value / 1_000).toFixed(0) + 'K';
         return '$' + value.toFixed(0);
+    }
+
+    get isSyncing() {
+        return this.radarState.value.isSyncing;
+    }
+
+    get syncComplete() {
+        return this.radarState.value.syncComplete;
     }
 }

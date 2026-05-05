@@ -14,17 +14,117 @@ public with sharing class OpportunityRadarEngine {
         @AuraEnabled public DateTime lastModifiedDate;
     }
 
-    public List<OpportunityWrapper> fetchOpportunities() {
-        List<Opportunity> opportunities = queryOpportunities();
-        Set<Id> opportunityIds = new Map<Id, Opportunity>(opportunities).keySet();
-        Map<Id, Date> lastTaskDateByOppId = getLastTaskDateByOpportunity(opportunityIds);
+    public class CursorPage {
+        @AuraEnabled public List<OpportunityWrapper> records;
+        @AuraEnabled public Database.PaginationCursor cursor;
+        @AuraEnabled public Integer nextIndex;
+        @AuraEnabled public Boolean hasMore;
+    }
 
-        List<OpportunityWrapper> result = new List<OpportunityWrapper>();
-        for (Opportunity opp : opportunities) {
-            result.add(buildWrapper(opp, lastTaskDateByOppId.get(opp.Id)));
+    private static final Integer DEFAULT_BATCH_SIZE = 200;
+    private static final List<String> OPP_FIELDS = new List<String>{
+        'Id', 'Name', 'Account.Name', 'StageName', 'Amount', 'CloseDate', 'Owner.Name',
+        'NextStep', 'LastActivityDate', 'LastModifiedDate', 'Probability', 'ForecastCategoryName'
+    };
+
+    public CursorPage fetchOpportunitiesPage(Database.PaginationCursor cursor, Integer nextIndex, Integer batchSize) {
+        Integer size = batchSize != null ? batchSize : DEFAULT_BATCH_SIZE;
+        Integer startIndex = nextIndex != null ? nextIndex : 0;
+
+        if (cursor == null) {
+            cursor = openPaginationCursor();
         }
 
-        return result;
+        Integer totalRecords = cursor.getNumRecords();
+        Integer actualSize = Math.min(size, totalRecords - startIndex);
+        Database.CursorFetchResult fetchResult = cursor.fetchPage(startIndex, actualSize);
+
+        List<Opportunity> opportunities = new List<Opportunity>();
+        for (SObject s : fetchResult.getRecords()) {
+            opportunities.add((Opportunity) s);
+        }
+
+        Set<Id> batchIds = new Map<Id, Opportunity>(opportunities).keySet();
+        Map<Id, Date> lastTaskDates = getLastTaskDateByOpportunity(batchIds);
+
+        List<OpportunityWrapper> wrappers = new List<OpportunityWrapper>();
+        for (Opportunity opp : opportunities) {
+            wrappers.add(buildWrapper(opp, lastTaskDates.get(opp.Id)));
+        }
+
+        Integer nextIdx = fetchResult.getNextIndex();
+
+        CursorPage page = new CursorPage();
+        page.records = wrappers;
+        page.cursor = cursor;
+        page.nextIndex = nextIdx;
+        page.hasMore = nextIdx < totalRecords;
+
+        return page;
+    }
+
+    private Database.PaginationCursor openPaginationCursor() {
+        Id currentUserId = UserInfo.getUserId();
+        return Database.getPaginationCursor(
+            'SELECT ' + String.join(OPP_FIELDS, ', ')
+            + ' FROM Opportunity WHERE IsClosed = false'
+            + ' AND OwnerId = :currentUserId'
+            + ' ORDER BY CloseDate ASC NULLS LAST, Id ASC'
+        );
+    }
+
+    public List<OpportunityWrapper> fetchOpportunitiesByIds(List<Id> ids) {
+        if (ids == null || ids.isEmpty()) return new List<OpportunityWrapper>();
+        Id userId = UserInfo.getUserId();
+        Set<Id> idSet = new Set<Id>(ids);
+        List<Opportunity> opps = Database.query(
+            'SELECT ' + String.join(OPP_FIELDS, ', ') + ' FROM Opportunity WHERE Id IN :idSet AND IsClosed = false AND OwnerId = :userId'
+        );
+        Map<Id, Date> lastTaskDates = getLastTaskDateByOpportunity(idSet);
+        List<OpportunityWrapper> wrappers = new List<OpportunityWrapper>();
+        for (Opportunity opp : opps) {
+            wrappers.add(buildWrapper(opp, lastTaskDates.get(opp.Id)));
+        }
+
+        return wrappers;
+    }
+
+    public List<OpportunityWrapper> searchOpportunities(String searchTerm) {
+        if (String.isBlank(searchTerm) || searchTerm.trim().length() < 2) {
+            return new List<OpportunityWrapper>();
+        }
+
+        Id userId = UserInfo.getUserId();
+        String term = '%' + searchTerm.trim() + '%';
+
+        List<Opportunity> opps = Database.query(
+            'SELECT ' + String.join(OPP_FIELDS, ', ')
+            + ' FROM Opportunity WHERE IsClosed = false AND OwnerId = :userId'
+            + ' AND (Name LIKE :term OR Account.Name LIKE :term)'
+            + ' ORDER BY CloseDate ASC NULLS LAST LIMIT 2000'
+        );
+
+        Set<Id> oppIds = new Map<Id, Opportunity>(opps).keySet();
+        Map<Id, Date> lastTaskDates = getLastTaskDateByOpportunity(oppIds);
+        List<OpportunityWrapper> wrappers = new List<OpportunityWrapper>();
+        for (Opportunity opp : opps) {
+            wrappers.add(buildWrapper(opp, lastTaskDates.get(opp.Id)));
+        }
+
+        return wrappers;
+    }
+
+    public OpportunityWrapper fetchSingleOpportunity(Id opportunityId) {
+        List<Opportunity> opps = Database.query(
+            'SELECT ' + String.join(OPP_FIELDS, ', ') + ' FROM Opportunity WHERE Id = :opportunityId LIMIT 1'
+        );
+
+        if (opps.isEmpty()) {
+            throw new QueryException('Opportunity not found.');
+        }
+
+        Map<Id, Date> lastTaskDates = getLastTaskDateByOpportunity(new Set<Id>{ opportunityId });
+        return buildWrapper(opps[0], lastTaskDates.get(opportunityId));
     }
 
     public void createTask(Id opportunityId, String subject, Date dueDate) {
@@ -37,17 +137,6 @@ public with sharing class OpportunityRadarEngine {
         );
     }
 
-    private List<Opportunity> queryOpportunities() {
-        Id currentUserId = UserInfo.getUserId();
-        String baseQuery = 'SELECT Id, Name, Account.Name, StageName, Amount, CloseDate, Owner.Name, '
-            + 'NextStep, LastActivityDate, LastModifiedDate, Probability, ForecastCategoryName '
-            + 'FROM Opportunity WHERE IsClosed = false'
-            + ' AND OwnerId = :currentUserId'
-            + ' ORDER BY CloseDate ASC NULLS LAST LIMIT 50000';
-
-        return Database.query(baseQuery);
-    }
-
     private Map<Id, Date> getLastTaskDateByOpportunity(Set<Id> opportunityIds) {
         Map<Id, Date> result = new Map<Id, Date>();
         for (Task t : [
@@ -56,12 +145,13 @@ public with sharing class OpportunityRadarEngine {
             WHERE WhatId IN :opportunityIds
             AND ActivityDate != null
             ORDER BY WhatId, ActivityDate DESC
+            LIMIT 10000
         ]) {
             if (!result.containsKey(t.WhatId)) {
                 result.put(t.WhatId, t.ActivityDate);
             }
         }
-
+		
         return result;
     }
 
@@ -95,5 +185,4 @@ public with sharing class OpportunityRadarEngine {
 
         return opp.LastModifiedDate != null ? opp.LastModifiedDate.date() : null;
     }
-
 }
