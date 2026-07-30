@@ -2,7 +2,7 @@
 
 [![True North Dreamin' 2026](https://img.shields.io/badge/True%20North%20Dreamin'%202026-Toronto%2C%20ON%20%7C%20May%2011--12-0176d3?style=for-the-badge&logo=salesforce&logoColor=white)](https://truenorthdreamin.com)
 
-<strong>["Build Next-Gen Lightning Apps That Are Fast and Intelligent" by Andrii Sukhetskyi](https://medium.com/@ansukhetskyi/27c79cb5a32c?source=friends_link&sk=4c050394c3c2f5ba34a4eb4737ab6074)</strong>
+<strong>["Build Next-Gen Lightning Apps That Are Fast and Intelligent" by Andrii Sukhetskyi](https://www.bulkifiedthinking.com/salesforce-lwc-performance-journey-from-basic-apex-calls-to-optimized-ui-tnd26/)</strong>
 
 </div>
 <br>
